@@ -1,10 +1,10 @@
 import os
 import requests
 import frappe
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from frappe.utils.pdf import get_pdf
 
-load_dotenv()
+# load_dotenv()
 
 DOCUMENSO_API_KEY = os.getenv("DOCUMENSO_API_KEY")
 DOCUMENSO_BASE_URL = os.getenv("DOCUMENSO_BASE_URL")
@@ -96,7 +96,7 @@ def create_field_in_documenso(contract_name):
     if not document_id or not recipient_id:
         return {"error": "Document ID or Recipient ID is missing."}
 
-    url = f"https://app.documenso.com/api/v1/documents/{document_id}/fields"
+    url = f"{DOCUMENSO_BASE_URL}/{document_id}/fields"
     payload = {
         "recipientId": recipient_id,
         "type": "SIGNATURE",
@@ -114,30 +114,75 @@ def create_field_in_documenso(contract_name):
     else:
         return {"error": response.text}
 
-@frappe.whitelist()
+frappe.whitelist()
 def send_contract_for_signature(contract_name):
+    # Fetch contract document
     contract = frappe.get_doc("Contract", contract_name)
-    document_id = int(contract.document_id)
+    document_id = contract.document_id
 
     if not document_id:
         return {"error": "Document ID is missing."}
 
-    url = f"https://app.documenso.com/api/v1/documents/{document_id}/send"
+    # Construct the API URL
+    url = f"{DOCUMENSO_BASE_URL}/{int(document_id)}/send"
+    print("\nSending to:", url, "\n")
 
     payload = {
         "sendEmail": True,
         "sendCompletionEmails": True
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-    print("/n", response, "/n")
-
     try:
+        # Make the API request
+        response = requests.post(url, headers=headers, json=payload)
         response_data = response.json()
-    except Exception:
-        response_data = {"error": response.text}
+    except Exception as e:
+        frappe.log_error(
+            title="Documenso Response Error", 
+            message=f"Error parsing response: {e}\nRaw response: {response.text}"
+        )
+        return {"error": "Failed to parse Documenso response."}
 
     if response.status_code in [200, 201]:
-        return {"message": response_data}
+        try:
+            # Handle both list and dict responses
+            recipient = None
+            if isinstance(response_data, list) and response_data:
+                recipient = response_data[0]
+            elif isinstance(response_data, dict):
+                recipient_list = response_data.get("recipients")
+                if isinstance(recipient_list, list) and recipient_list:
+                    recipient = recipient_list[0]
+
+            # Check if the signing URL is present
+            if recipient and recipient.get("signingUrl"):
+                signing_url = recipient["signingUrl"]
+                print("\nSigning URL:", signing_url, "\n")
+
+                # Save the signing URL to the contract
+                frappe.db.set_value("Contract", contract.name, "signing_url", signing_url)
+                frappe.db.commit()
+
+                return {"message": "Document sent and signing URL saved successfully."}
+            else:
+                frappe.log_error(
+                    title="Missing Signing URL",
+                    message=f"No signing URL found in response: {frappe.as_json(response_data)}"
+                )
+                return {"error": "Signing URL not found in the response."}
+
+        except Exception as e:
+            # Log any errors that occur while handling the response
+            frappe.log_error(
+                title="Error Saving Signing URL",
+                message=f"Exception: {e}\nResponse: {frappe.as_json(response_data)}"
+            )
+            return {"error": "Error while saving signing URL."}
+
     else:
-        return {"message": {"error": response_data}}
+        # Log if the response code is not 200 or 201
+        frappe.log_error(
+            title="Documenso API Error",
+            message=f"Status Code: {response.status_code}\nResponse: {frappe.as_json(response_data)}"
+        )
+        return {"error": response_data}
