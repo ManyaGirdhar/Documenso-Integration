@@ -1,10 +1,10 @@
 import os
 import requests
 import frappe
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from frappe.utils.pdf import get_pdf
 
-load_dotenv()
+# load_dotenv()
 
 DOCUMENSO_API_KEY = os.getenv("DOCUMENSO_API_KEY")
 DOCUMENSO_BASE_URL = os.getenv("DOCUMENSO_BASE_URL")
@@ -96,7 +96,7 @@ def create_field_in_documenso(contract_name):
     if not document_id or not recipient_id:
         return {"error": "Document ID or Recipient ID is missing."}
 
-    url = f"https://app.documenso.com/api/v1/documents/{document_id}/fields"
+    url = f"{DOCUMENSO_BASE_URL}/{document_id}/fields"
     payload = {
         "recipientId": recipient_id,
         "type": "SIGNATURE",
@@ -122,7 +122,7 @@ def send_contract_for_signature(contract_name):
     if not document_id:
         return {"error": "Document ID is missing."}
 
-    url = f"https://app.documenso.com/api/v1/documents/{document_id}/send"
+    url = f"{DOCUMENSO_BASE_URL}{document_id}/send"
 
     payload = {
         "sendEmail": True,
@@ -130,14 +130,24 @@ def send_contract_for_signature(contract_name):
     }
 
     response = requests.post(url, headers=headers, json=payload)
-    print("/n", response, "/n")
-
     try:
         response_data = response.json()
     except Exception:
-        response_data = {"error": response.text}
+        return {"error": response.text}
 
     if response.status_code in [200, 201]:
-        return {"message": response_data}
+        try:
+            # Extract signing URL from the response
+            recipients = response_data.get("recipients", [])
+            if recipients:
+                signing_url = recipients[0].get("signingUrl")
+                if signing_url:
+                    frappe.db.set_value("Contract", contract.name, "signing_url", signing_url)
+                    frappe.db.commit()
+                    
+        except Exception as e:
+            frappe.log_error(f"Error saving signing URL: {str(e)}", "Documenso Integration")
+
+        return {"message": "Document sent and signing URL saved successfully."}
     else:
-        return {"message": {"error": response_data}}
+        return {"error": response_data}
