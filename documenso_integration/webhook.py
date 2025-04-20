@@ -1,13 +1,16 @@
 import frappe
 import os
+import json
 from frappe import _
 
 @frappe.whitelist(allow_guest=True)
 def incoming_webhook():
     # Get the webhook key from the environment variable
     expected_key = os.getenv("DOCUMENSO_WEBHOOK_KEY")
-    frappe.logger("webhook").info(f"Expected Key: {expected_key}")
     received_key = frappe.request.args.get("key")
+
+    # Log the keys for debugging
+    frappe.logger("webhook").info(f"Expected Key: {expected_key}")
     frappe.logger("webhook").info(f"Received Key: {received_key}")
 
     # Check if the keys match, otherwise throw an error
@@ -15,10 +18,12 @@ def incoming_webhook():
         frappe.throw(_("Unauthorized request"), frappe.PermissionError)
 
     # Capture the webhook payload
-    payload = frappe.local.form_dict
+    payload = frappe.request.get_json()
+    if not payload:
+        frappe.throw(_("Invalid or missing JSON payload"), frappe.BadRequest)
 
     # Log the payload to verify
-    frappe.logger("webhook").info(f"Incoming Documenso Webhook: {payload}")
+    frappe.logger("webhook").info(f"Incoming Documenso Webhook: {json.dumps(payload)}")
 
     # Extract the necessary information from the payload
     event = payload.get('event')
@@ -31,20 +36,20 @@ def incoming_webhook():
 
     # Get the document to update
     try:
-        doc = frappe.get_doc("Contract", document_id)  # Replace 'Your Document Type' with the actual DocType
+        doc = frappe.get_doc("Contract", document_id)
     except frappe.DoesNotExistError:
         frappe.throw(_("Document not found"))
 
     # Handle different events and update the workflow state accordingly
-    if event == "DOCUMENT_SIGNED" and status == "COMPLETED":
+    if event == "document.signed" and status == "COMPLETED":
         doc.workflow_state = "Active"
         frappe.logger("webhook").info(f"Document {document_id} signed and workflow state updated to 'Active'")
 
-    elif event == "DOCUMENT_REJECTED" and status == "PENDING":
+    elif event == "document.rejected" and status == "PENDING":
         doc.workflow_state = "Rejected"
         frappe.logger("webhook").info(f"Document {document_id} rejected and workflow state updated to 'Rejected'")
 
-    elif event == "DOCUMENT_CANCELLED" and status == "PENDING":
+    elif event == "document.cancelled" and status == "PENDING":
         doc.workflow_state = "Rejected"
         frappe.logger("webhook").info(f"Document {document_id} canceled and workflow state updated to 'Canceled'")
 
