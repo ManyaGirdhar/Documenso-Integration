@@ -100,11 +100,11 @@ def create_field_in_documenso(contract_name):
     payload = {
         "recipientId": recipient_id,
         "type": "SIGNATURE",
-        "pageNumber": 1,
-        "pageX": 1,
-        "pageY": 1,
-        "pageWidth": 1,
-        "pageHeight": 1,
+        "pageNumber": 2,
+        "pageX": 30,
+        "pageY": 237,
+        "pageWidth": 150,
+        "pageHeight": 50,
         "fieldMeta": {}
     }
 
