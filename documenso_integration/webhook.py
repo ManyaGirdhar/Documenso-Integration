@@ -6,7 +6,9 @@ from frappe import _
 def incoming_webhook():
     # Get the webhook key from the environment variable
     expected_key = os.getenv("DOCUMENSO_WEBHOOK_KEY")
+    frappe.logger("webhook").info(f"Expected Key: {expected_key}")
     received_key = frappe.request.args.get("key")
+    frappe.logger("webhook").info(f"Received Key: {received_key}")
 
     # Check if the keys match, otherwise throw an error
     if expected_key and received_key != expected_key:
@@ -35,8 +37,8 @@ def incoming_webhook():
 
     # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_SIGNED" and status == "COMPLETED":
-        doc.workflow_state = "Mark as Signed"
-        frappe.logger("webhook").info(f"Document {document_id} signed and workflow state updated to 'Mark as Signed'")
+        doc.workflow_state = "Active"
+        frappe.logger("webhook").info(f"Document {document_id} signed and workflow state updated to 'Active'")
 
     elif event == "DOCUMENT_REJECTED" and status == "PENDING":
         doc.workflow_state = "Rejected"

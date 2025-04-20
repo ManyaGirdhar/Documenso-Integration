@@ -38,11 +38,11 @@ def sign_contract(contract_name):
 def create_documenso_record(contract_name):
     contract = frappe.get_doc("Contract", contract_name)
     payload = {
-        "title": "Contract Agreement",
+        "title": contract.name,
         "externalId": contract.name,
         "recipients": [
             {
-                "email": contract.counterparty_email,
+                "email": contract.signee_email,
                 "name": contract.counterparty_name,
                 "role": "SIGNER"
             }
