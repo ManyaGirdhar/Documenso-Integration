@@ -7,8 +7,8 @@ from frappe import _
 def incoming_webhook():
     # Get the webhook key from the environment variable
     expected_key = os.getenv("DOCUMENSO_WEBHOOK_KEY")
-    received_key = frappe.request.args.get("key")
-
+    # Get received secret key from header
+    received_key = frappe.request.headers.get("X-Documenso-Secret")
     # Log the keys for debugging
     frappe.log_error(f"Expected Key: {expected_key}\nReceived Key: {received_key}", "Documenso Webhook Auth")
 
