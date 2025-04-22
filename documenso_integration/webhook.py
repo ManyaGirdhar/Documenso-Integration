@@ -10,8 +10,7 @@ def incoming_webhook():
     received_key = frappe.request.args.get("key")
 
     # Log the keys for debugging
-    frappe.logger("webhook").info(f"Expected Key: {expected_key}")
-    frappe.logger("webhook").info(f"Received Key: {received_key}")
+    frappe.log_error(f"Expected Key: {expected_key}\nReceived Key: {received_key}", "Documenso Webhook Auth")
 
     # Check if the keys match, otherwise throw an error
     if expected_key and received_key != expected_key:
@@ -23,7 +22,7 @@ def incoming_webhook():
         frappe.throw(_("Invalid or missing JSON payload"), frappe.BadRequest)
 
     # Log the payload to verify
-    frappe.logger("webhook").info(f"Incoming Documenso Webhook: {json.dumps(payload)}")
+    frappe.log_error(json.dumps(payload, indent=2), "Incoming Documenso Webhook")
 
     # Extract the necessary information from the payload
     event = payload.get('event')
@@ -43,24 +42,24 @@ def incoming_webhook():
     # Handle different events and update the workflow state accordingly
     if event == "document.signed" and status == "COMPLETED":
         doc.workflow_state = "Active"
-        frappe.logger("webhook").info(f"Document {document_id} signed and workflow state updated to 'Active'")
+        frappe.log_error(f"Document {document_id} signed and updated to 'Active'", "Documenso Webhook")
 
     elif event == "document.rejected" and status == "PENDING":
         doc.workflow_state = "Rejected"
-        frappe.logger("webhook").info(f"Document {document_id} rejected and workflow state updated to 'Rejected'")
+        frappe.log_error(f"Document {document_id} rejected and updated to 'Rejected'", "Documenso Webhook")
 
     elif event == "document.cancelled" and status == "PENDING":
         doc.workflow_state = "Rejected"
-        frappe.logger("webhook").info(f"Document {document_id} canceled and workflow state updated to 'Canceled'")
+        frappe.log_error(f"Document {document_id} canceled and updated to 'Canceled'", "Documenso Webhook")
 
     else:
-        frappe.logger("webhook").warning(f"Unhandled event or status for document {document_id}: event={event}, status={status}")
+        frappe.log_error(f"Unhandled event/status:\nEvent: {event}\nStatus: {status}\nDocument ID: {document_id}", "Documenso Webhook")
         frappe.throw(_("Unhandled event or status"))
 
     # Save the document with the updated workflow state
     doc.save()
 
-    # Optionally, you can log the updated workflow state
-    frappe.logger("webhook").info(f"Document {document_id} workflow state successfully updated to {doc.workflow_state}")
+    # Log the final workflow state
+    frappe.log_error(f"Document {document_id} successfully updated to state: {doc.workflow_state}", "Documenso Webhook")
 
     return {"status": "success", "message": "Webhook processed and document updated"}
