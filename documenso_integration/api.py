@@ -114,7 +114,7 @@ def create_field_in_documenso(contract_name):
     else:
         return {"error": response.text}
 
-frappe.whitelist()
+@frappe.whitelist()
 def send_contract_for_signature(contract_name):
     # Fetch contract document
     contract = frappe.get_doc("Contract", contract_name)
@@ -186,3 +186,39 @@ def send_contract_for_signature(contract_name):
             message=f"Status Code: {response.status_code}\nResponse: {frappe.as_json(response_data)}"
         )
         return {"error": response_data}
+
+@frappe.whitelist()
+def download_signed_contract(contract_name):
+    contract = frappe.get_doc("Contract", contract_name)
+    document_id = contract.document_id
+
+    if not document_id:
+        return {"error": "Document ID is missing."}
+
+    url = f"{DOCUMENSO_BASE_URL}/{int(document_id)}/download"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        try:
+            data = response.json()
+            download_url = data.get("downloadUrl")
+            frappe.log_error("Download URL:", download_url)
+
+            if not download_url:
+                return {"error": "Download URL not found in the response."}
+
+            # Save the download URL to the Contract doctype
+            frappe.db.set_value("Contract", contract.name, "download_url", download_url)
+            frappe.db.commit()
+
+            return {
+                "success": True,
+                "message": "Download URL saved successfully.",
+                "download_url": download_url
+            }
+        except Exception as e:
+            frappe.log_error(f"Download URL Parsing Error: {e}\nResponse: {response.text}")
+            return {"error": "Failed to parse download URL from Documenso."}
+    else:
+        frappe.log_error(f"Documenso Download URL Error: {response.text}")
+        return {"error": f"Failed to get download URL. Status code: {response.status_code}"}
