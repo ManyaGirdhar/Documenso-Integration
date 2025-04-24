@@ -41,7 +41,8 @@ def incoming_webhook():
 
     # Get the document to update
     try:
-        doc = frappe.get_doc("Contract", document_id)
+        doc = frappe.get_doc("Contract", {"document_id": document_id})
+        frappe.log_error(f"Document found: {doc.name}", "Documenso Webhook Document Found")
     except frappe.DoesNotExistError:
         frappe.throw(_("Document not found"))
 
