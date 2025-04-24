@@ -49,7 +49,8 @@ def incoming_webhook():
     # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
         doc.workflow_state = "Active"
-        doc.save(ignore_permissions=True)
+        doc.save()
+        frappe.db.commit()
         download_signed_contract(doc.name)    #Download URL to be saved in the Contract doctype
         frappe.log_error(f"Document {document_id} signed and updated to 'Active'", "Documenso Webhook")
 
