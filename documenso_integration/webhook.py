@@ -28,9 +28,13 @@ def incoming_webhook():
 
     # Extract the necessary information from the payload
     event = payload.get('event')
+    frappe.log_error(f"Event: {event}", "Documenso Webhook Event")
     document_data = payload.get('payload', {})
+    frappe.log_error(f"Document Data: {json.dumps(document_data, indent=2)}", "Documenso Webhook Document Data")
     document_id = document_data.get('id')
+    frappe.log_error(f"Document ID: {document_id}", "Documenso Webhook Document ID")
     status = document_data.get('status')
+    frappe.log_error(f"Status: {status}", "Documenso Webhook Status")
 
     if not document_id or not status:
         frappe.throw(_("Missing required data in payload"))
