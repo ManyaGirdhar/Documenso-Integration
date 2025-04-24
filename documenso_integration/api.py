@@ -102,9 +102,9 @@ def create_field_in_documenso(contract_name):
         "type": "SIGNATURE",
         "pageNumber": 2,
         "pageX": 30,
-        "pageY": 237,
-        "pageWidth": 150,
-        "pageHeight": 50,
+        "pageY": 180,
+        "pageWidth": 15,
+        "pageHeight": 15,
         "fieldMeta": {}
     }
 
