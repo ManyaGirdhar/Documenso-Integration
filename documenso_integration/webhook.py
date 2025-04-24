@@ -40,15 +40,15 @@ def incoming_webhook():
         frappe.throw(_("Document not found"))
 
     # Handle different events and update the workflow state accordingly
-    if event == "document.signed" and status == "COMPLETED":
+    if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
         doc.workflow_state = "Active"
         frappe.log_error(f"Document {document_id} signed and updated to 'Active'", "Documenso Webhook")
 
-    elif event == "document.rejected" and status == "PENDING":
+    elif event == "DOCUMENT_REJECTED" and status == "PENDING":
         doc.workflow_state = "Rejected"
         frappe.log_error(f"Document {document_id} rejected and updated to 'Rejected'", "Documenso Webhook")
 
-    elif event == "document.cancelled" and status == "PENDING":
+    elif event == "DOCUMENT_CANCELLED" and status == "PENDING":
         doc.workflow_state = "Rejected"
         frappe.log_error(f"Document {document_id} canceled and updated to 'Canceled'", "Documenso Webhook")
 
