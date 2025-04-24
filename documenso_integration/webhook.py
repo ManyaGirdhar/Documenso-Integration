@@ -2,6 +2,8 @@ import frappe
 import os
 import json
 from frappe import _
+from documenso_integration.api import download_signed_contract  
+
 
 @frappe.whitelist(allow_guest=True)
 def incoming_webhook():
@@ -42,6 +44,7 @@ def incoming_webhook():
     # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
         doc.workflow_state = "Active"
+        download_signed_contract(doc.name)    #Download URL to be saved in the Contract doctype
         frappe.log_error(f"Document {document_id} signed and updated to 'Active'", "Documenso Webhook")
 
     elif event == "DOCUMENT_REJECTED" and status == "PENDING":
