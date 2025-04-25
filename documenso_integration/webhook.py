@@ -52,6 +52,12 @@ def incoming_webhook():
         frappe.db.set_value("Contract", doc.name, "workflow_state", "Active")
         frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
 
+        frappe.publish_realtime('workflow_state_updated', {
+                'contract_name': doc.name,
+                'workflow_state': doc.workflow_state
+            })
+        frappe.log_error(f"Real-time event published: {doc.name} updated to Active", "Documenso Webhook Publish Realtime")
+
         # try:
         #     doc.flags.ignore_validate = True
         #     doc.flags.ignore_mandatory = True
