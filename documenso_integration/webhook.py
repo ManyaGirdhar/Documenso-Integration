@@ -52,14 +52,14 @@ def incoming_webhook():
         frappe.db.set_value("Contract", doc.name, "workflow_state", "Active")
         frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
 
-        try:
-            doc.flags.ignore_validate = True
-            doc.flags.ignore_mandatory = True
-            doc.save(ignore_permissions=True)
-            frappe.db.commit()
-            frappe.log_error(f"After Save - Document Saved with Workflow State: {doc.workflow_state}", "Debug Save")
-        except Exception as e:
-            frappe.log_error(f"Error saving document {doc.name}: {str(e)}", "Documenso Save Error")
+        # try:
+        #     doc.flags.ignore_validate = True
+        #     doc.flags.ignore_mandatory = True
+        #     doc.save(ignore_permissions=True)
+        #     frappe.db.commit()
+        #     frappe.log_error(f"After Save - Document Saved with Workflow State: {doc.workflow_state}", "Debug Save")
+        # except Exception as e:
+        #     frappe.log_error(f"Error saving document {doc.name}: {str(e)}", "Documenso Save Error")
 
         try:
             download_signed_contract(doc.name)
