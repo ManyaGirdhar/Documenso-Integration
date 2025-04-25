@@ -47,12 +47,25 @@ def incoming_webhook():
         frappe.throw(_("Document not found"))
 
     # Handle different events and update the workflow state accordingly
+    # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
         doc.workflow_state = "Active"
-        doc.save(ignore_permissions=True)
-        frappe.db.commit()
-        download_signed_contract(doc.name)    #Download URL to be saved in the Contract doctype
-        frappe.log_error(f"Document {document_id} signed and updated to 'Active'", "Documenso Webhook")
+        frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
+
+        try:
+            doc.flags.ignore_validate = True
+            doc.flags.ignore_mandatory = True
+            doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            frappe.log_error(f"After Save - Document Saved with Workflow State: {doc.workflow_state}", "Debug Save")
+        except Exception as e:
+            frappe.log_error(f"Error saving document {doc.name}: {str(e)}", "Documenso Save Error")
+
+        try:
+            download_signed_contract(doc.name)
+        except Exception as e:
+            frappe.log_error(f"Error downloading signed contract for {doc.name}: {str(e)}", "Documenso Download Error")
+
 
     elif event == "DOCUMENT_REJECTED" and status == "PENDING":
         doc.workflow_state = "Rejected"
