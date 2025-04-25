@@ -49,7 +49,7 @@ def incoming_webhook():
     # Handle different events and update the workflow state accordingly
     # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
-        doc.workflow_state = "Active"
+        frappe.db.set_value("Contract", doc.name, "workflow_state", "Active")
         frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
 
         try:
