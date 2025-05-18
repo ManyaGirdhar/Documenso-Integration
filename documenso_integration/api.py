@@ -131,7 +131,7 @@ def create_field_in_documenso(contract_name):
     # document_id = contract.document_id
     api_info = frappe.get_doc("API Information", contract.documenso_id)
     document_id = api_info.document_id
-    recipient_ids_str = contract.recipient_id
+    recipient_ids_str = api_info.recipient_id
 
     if not document_id or not recipient_ids_str:
         return {"error": "Document ID or Recipient ID(s) is missing."}
@@ -217,11 +217,11 @@ def send_contract_for_signature(contract_name):
                 return {"error": "No recipients found in response."}
 
             # Extract signing URLs corresponding to existing recipient IDs
-            recipient_ids = [rid.strip() for rid in contract.recipient_id.split(",") if rid.strip()]
+            recipient_ids = [rid.strip() for rid in api_info.recipient_id.split(",") if rid.strip()]
             print(recipient_ids)
 
             # Update the contract document
-            contract.save(ignore_permissions=True)
+            api_info.save(ignore_permissions=True)
             frappe.db.commit()
 
             return {"message": "Document sent and signing URLs saved successfully."}
@@ -262,8 +262,8 @@ def download_signed_contract(contract_name):
             if not download_url:
                 return {"error": "Download URL not found in the response."}
 
-            # Save the download URL to the Contract doctype
-            frappe.db.set_value("Contract", contract.name, "download_url", download_url)
+            # Save the download URL to the API Information doctype
+            frappe.db.set_value("API Information", api_info.name, "download_url", download_url)
             frappe.db.commit()
 
             return {
