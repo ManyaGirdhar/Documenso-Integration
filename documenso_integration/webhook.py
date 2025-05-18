@@ -69,9 +69,23 @@ def incoming_webhook():
     #         frappe.log_error(f"Error downloading signed contract for {doc.name}: {str(e)}", "Documenso Download Error")
 
 
-    # elif event == "DOCUMENT_REJECTED" and status == "PENDING":
-    #     doc.workflow_state = "Rejected"
-    #     frappe.log_error(f"Document {document_id} rejected and updated to 'Rejected'", "Documenso Webhook")
+    elif event == "DOCUMENT_REJECTED":
+        try:
+            if doc.document_id:
+                # Find the Contract using document_id
+                contract_name = frappe.db.get_value("Contract", {"documenso_id": doc.document_id}, "name")
+                
+                if contract_name:
+                    contract = frappe.get_doc("Contract", contract_name)
+                    if contract.workflow_state != "Active":
+                        contract.workflow_state = "Active"
+                        contract.save(ignore_permissions=True)
+                        frappe.log_error(f"Contract {contract.name} set to 'Active' on DOCUMENT_REJECTED", "Documenso Webhook")
+                else:
+                    frappe.log_error(f"No Contract found with document_id: {doc.document_id}", "Documenso Rejected Event")
+        except Exception as e:
+            frappe.log_error(f"Error handling DOCUMENT_REJECTED for {doc.name}: {str(e)}", "Documenso Rejected Event Error")
+
 
     # elif event == "DOCUMENT_CANCELLED" and status == "PENDING":
     #     doc.workflow_state = "Rejected"
