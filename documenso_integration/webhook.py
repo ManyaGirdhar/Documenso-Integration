@@ -41,54 +41,85 @@ def incoming_webhook():
 
     # Get the document to update
     try:
-        doc = frappe.get_doc("Contract", {"document_id": document_id})
+        # doc = frappe.get_doc("Contract", {"document_id": document_id})
+        doc = frappe.get_doc("API Information", {"document_id": document_id})
         frappe.log_error(f"Document found: {doc.name}", "Documenso Webhook Document Found")
     except frappe.DoesNotExistError:
         frappe.throw(_("Document not found"))
 
-    # Handle different events and update the workflow state accordingly
-    # Handle different events and update the workflow state accordingly
+    # # Handle different events and update the workflow state accordingly
     if event == "DOCUMENT_COMPLETED" and status == "COMPLETED":
-        frappe.db.set_value("Contract", doc.name, "workflow_state", "Active")
-        frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
-
-        frappe.publish_realtime('workflow_state_updated', {
-                'contract_name': doc.name,
-                'workflow_state': doc.workflow_state
-            })
-        frappe.log_error(f"Real-time event published: {doc.name} updated to Active", "Documenso Webhook Publish Realtime")
-
-        # try:
-        #     doc.flags.ignore_validate = True
-        #     doc.flags.ignore_mandatory = True
-        #     doc.save(ignore_permissions=True)
-        #     frappe.db.commit()
-        #     frappe.log_error(f"After Save - Document Saved with Workflow State: {doc.workflow_state}", "Debug Save")
-        # except Exception as e:
-        #     frappe.log_error(f"Error saving document {doc.name}: {str(e)}", "Documenso Save Error")
-
         try:
-            download_signed_contract(doc.name)
+            download_signed_contract(doc.name)  # This should update the download_url field
         except Exception as e:
             frappe.log_error(f"Error downloading signed contract for {doc.name}: {str(e)}", "Documenso Download Error")
+            
+    #     frappe.db.set_value("Contract", doc.name, "workflow_state", "Active")
+    #     frappe.log_error(f"Before Save - Workflow State: {doc.workflow_state}", "Debug Save")
+
+    #     frappe.publish_realtime('workflow_state_updated', {
+    #             'contract_name': doc.name,
+    #             'workflow_state': doc.workflow_state
+    #         })
+    #     frappe.log_error(f"Real-time event published: {doc.name} updated to Active", "Documenso Webhook Publish Realtime")
+
+    #     try:
+    #         download_signed_contract(doc.name)
+    #     except Exception as e:
+    #         frappe.log_error(f"Error downloading signed contract for {doc.name}: {str(e)}", "Documenso Download Error")
 
 
-    elif event == "DOCUMENT_REJECTED" and status == "PENDING":
-        doc.workflow_state = "Rejected"
-        frappe.log_error(f"Document {document_id} rejected and updated to 'Rejected'", "Documenso Webhook")
+    elif event == "DOCUMENT_REJECTED":
+        try:
+            if doc.document_id:
+                # Find the Contract using document_id
+                contract_name = frappe.db.get_value("Contract", {"documenso_id": doc.document_id}, "name")
+                
+                if contract_name:
+                    contract = frappe.get_doc("Contract", contract_name)
+                    if contract.workflow_state != "Active":
+                        contract.workflow_state = "Active"
+                        contract.save(ignore_permissions=True)
+                        frappe.log_error(f"Contract {contract.name} set to 'Active' on DOCUMENT_REJECTED", "Documenso Webhook")
+                else:
+                    frappe.log_error(f"No Contract found with document_id: {doc.document_id}", "Documenso Rejected Event")
+        except Exception as e:
+            frappe.log_error(f"Error handling DOCUMENT_REJECTED for {doc.name}: {str(e)}", "Documenso Rejected Event Error")
 
-    elif event == "DOCUMENT_CANCELLED" and status == "PENDING":
-        doc.workflow_state = "Rejected"
-        frappe.log_error(f"Document {document_id} canceled and updated to 'Canceled'", "Documenso Webhook")
 
-    else:
-        frappe.log_error(f"Unhandled event/status:\nEvent: {event}\nStatus: {status}\nDocument ID: {document_id}", "Documenso Webhook")
-        frappe.throw(_("Unhandled event or status"))
+    # elif event == "DOCUMENT_CANCELLED" and status == "PENDING":
+    #     doc.workflow_state = "Rejected"
+    #     frappe.log_error(f"Document {document_id} canceled and updated to 'Canceled'", "Documenso Webhook")
 
-    # Save the document with the updated workflow state
-    doc.save()
+    # else:
+    #     frappe.log_error(f"Unhandled event/status:\nEvent: {event}\nStatus: {status}\nDocument ID: {document_id}", "Documenso Webhook")
+    #     frappe.throw(_("Unhandled event or status"))
 
-    # Log the final workflow state
-    frappe.log_error(f"Document {document_id} successfully updated to state: {doc.workflow_state}", "Documenso Webhook")
+    # # Save the document with the updated workflow state
+    # doc.save()
+
+    # # Log the final workflow state
+    # frappe.log_error(f"Document {document_id} successfully updated to state: {doc.workflow_state}", "Documenso Webhook")
 
     return {"status": "success", "message": "Webhook processed and document updated"}
+
+@frappe.whitelist(allow_guest=True)
+def api_information_after_save(doc, method):
+    # Only proceed if download_url is filled
+    if doc.download_url:
+        # Update linked Contract workflow_state to "Active"
+        if doc.document_id:
+            try:
+                # Get the Contract doc name using document_id
+                contract_name = frappe.db.get_value("Contract", {"documenso_id": doc.document_id}, "name")
+                
+                if contract_name:
+                    contract = frappe.get_doc("Contract", contract_name)
+                    if contract.workflow_state != "Active":
+                        contract.workflow_state = "Active"
+                        contract.save(ignore_permissions=True)
+                else:
+                    frappe.log_error(f"No Contract found with document_id: {doc.document_id}", "API Information Doc Events")
+
+            except Exception as e:
+                frappe.log_error(f"Failed to update Contract for document_id {doc.document_id}: {str(e)}", "API Information Doc Events")

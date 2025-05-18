@@ -69,19 +69,36 @@ def create_documenso_record(contract_name):
     if response.status_code == 200:
         doc_data = response.json()
         print(doc_data)
-        frappe.db.set_value("Contract", contract.name, "document_id", doc_data.get("documentId"))
-        frappe.db.set_value("Contract", contract.name, "upload_url", doc_data.get("uploadUrl"))
+        # frappe.db.set_value("Contract", contract.name, "document_id", doc_data.get("documentId"))
+        # frappe.db.set_value("Contract", contract.name, "upload_url", doc_data.get("uploadUrl"))
 
         if "recipients" in doc_data and doc_data["recipients"]:
             print("\nRecipients:", doc_data["recipients"], "\n")
             recipient_ids = [str(r.get("recipientId")) for r in doc_data["recipients"] if r.get("recipientId")]
             joined_ids = ",".join(recipient_ids)
-            frappe.db.set_value("Contract", contract.name, "recipient_id", joined_ids)
+            # frappe.db.set_value("Contract", contract.name, "recipient_id", joined_ids)
             signing_url = [str(r.get("signingUrl")) for r in doc_data["recipients"] if r.get("signingUrl")]
             joined_urls = ",".join(signing_url)
-            frappe.db.set_value("Contract", contract.name, "signing_url", joined_urls)
+            # frappe.db.set_value("Contract", contract.name, "signing_url", joined_urls)
+
+# for api information
+            # Step 3: Create API Information record
+            api_info = frappe.get_doc({
+                "doctype": "API Information",
+                "document_id": doc_data.get("documentId"),
+                "upload_url": doc_data.get("uploadUrl"),
+                "recipient_id": joined_ids,
+                "signing_url": joined_urls,
+                # "download_url": doc_data.get("downloadUrl")  # if available
+            })
+            api_info.insert(ignore_permissions=True)
+
+            # Step 4: Link API Information to Contract
+            contract.db_set("documenso_id", api_info.name)
 
         frappe.db.commit()
+
+        
         return doc_data
     else:
         frappe.log_error(f"Documenso Error: {response.text}", "Documenso API")
@@ -92,7 +109,9 @@ def upload_contract_to_documenso(contract_name):
     try:
         contract = frappe.get_doc("Contract", contract_name)
         pdf_file = get_pdf(frappe.get_print("Contract", contract_name, print_format="Contract Final Print"))
-        upload_url = contract.upload_url  
+        api_info = frappe.get_doc("API Information", contract.documenso_id)
+        # upload_url = contract.upload_url  
+        upload_url = api_info.upload_url  # Use the upload URL from API Information
         if not upload_url:
             frappe.throw("Upload URL is missing. Ensure the document is created in Documenso.")
 
@@ -109,7 +128,9 @@ def upload_contract_to_documenso(contract_name):
 @frappe.whitelist()
 def create_field_in_documenso(contract_name):
     contract = frappe.get_doc("Contract", contract_name)
-    document_id = contract.document_id
+    # document_id = contract.document_id
+    api_info = frappe.get_doc("API Information", contract.documenso_id)
+    document_id = api_info.document_id
     recipient_ids_str = contract.recipient_id
 
     if not document_id or not recipient_ids_str:
@@ -158,7 +179,9 @@ def create_field_in_documenso(contract_name):
 def send_contract_for_signature(contract_name):
     # Fetch contract document
     contract = frappe.get_doc("Contract", contract_name)
-    document_id = contract.document_id
+    # document_id = contract.document_id
+    api_info = frappe.get_doc("API Information", contract.documenso_id)
+    document_id = api_info.document_id
 
     if not document_id:
         return {"error": "Document ID is missing."}
@@ -220,7 +243,9 @@ def send_contract_for_signature(contract_name):
 @frappe.whitelist()
 def download_signed_contract(contract_name):
     contract = frappe.get_doc("Contract", contract_name)
-    document_id = contract.document_id
+    # document_id = contract.document_id
+    api_info = frappe.get_doc("API Information", contract.documenso_id)
+    document_id = api_info.document_id
 
     if not document_id:
         return {"error": "Document ID is missing."}
