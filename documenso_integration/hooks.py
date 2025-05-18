@@ -145,6 +145,12 @@ app_license = "mit"
 # 	}
 # }
 
+doc_events = {
+    "API Information": {
+        "after_save": "documenso_integration.documenso_integration.webhook.api_information_after_save"
+    }
+}
+
 # Scheduled Tasks
 # ---------------
 

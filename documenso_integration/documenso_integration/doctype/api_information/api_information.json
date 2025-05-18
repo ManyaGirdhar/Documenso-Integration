@@ -1,0 +1,67 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{document_id}",
+ "creation": "2025-05-17 13:20:10.633114",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "document_id",
+  "upload_url",
+  "recipient_id",
+  "signing_url",
+  "download_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "document_id",
+   "fieldtype": "Data",
+   "label": "Document ID"
+  },
+  {
+   "fieldname": "upload_url",
+   "fieldtype": "Text",
+   "label": "Upload URL"
+  },
+  {
+   "fieldname": "recipient_id",
+   "fieldtype": "Data",
+   "label": "Recipient ID"
+  },
+  {
+   "fieldname": "signing_url",
+   "fieldtype": "Text",
+   "label": "Signing URL"
+  },
+  {
+   "fieldname": "download_url",
+   "fieldtype": "Small Text",
+   "label": "Download URL"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-05-17 13:38:35.540638",
+ "modified_by": "Administrator",
+ "module": "Documenso Integration",
+ "name": "API Information",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
