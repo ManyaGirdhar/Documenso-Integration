@@ -1,56 +1,63 @@
-import os
 import requests
 import frappe
-# from dotenv import load_dotenv
+from frappe import _
 from frappe.utils.pdf import get_pdf
 
-# load_dotenv()
+def get_settings():
+    return frappe.get_single("Documenso Settings")
 
-DOCUMENSO_API_KEY = os.getenv("DOCUMENSO_API_KEY")
-DOCUMENSO_BASE_URL = os.getenv("DOCUMENSO_BASE_URL")
+def get_headers():
+    settings = get_settings()
+    api_key = settings.get_password("api_key")
+    if not api_key:
+        frappe.throw(_("Documenso API Key is not configured in Documenso Settings."))
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
-headers = {
-    "Authorization": f"Bearer {DOCUMENSO_API_KEY}",
-    "Content-Type": "application/json"
-}
+def get_base_url():
+    settings = get_settings()
+    return settings.base_url or "https://documenso.com/api/v1/documents"
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def sign_contract(contract_name):
+    frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+    
     create_response = create_documenso_record(contract_name)
     if "error" in create_response:
-        frappe.throw(f"Documenso record creation failed: {create_response['error']}")
+        frappe.throw(_("Documenso record creation failed: {0}").format(create_response['error']))
         return  
 
     upload_response = upload_contract_to_documenso(contract_name)
-
     if "error" in upload_response:
-        frappe.throw(f"Documenso Upload Error: {upload_response['error']}")
+        frappe.throw(_("Documenso Upload Error: {0}").format(upload_response['error']))
     
     field_response = create_field_in_documenso(contract_name)
     if "error" in field_response:
-        frappe.throw(f"Documenso Field Creation Error: {field_response['error']}")
+        frappe.throw(_("Documenso Field Creation Error: {0}").format(field_response['error']))
 
     send_response = send_contract_for_signature(contract_name)
     if "error" in send_response:
-        frappe.throw(f"Documenso Send Error: {send_response['error']}")
+        frappe.throw(_("Documenso Send Error: {0}").format(send_response['error']))
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_documenso_record(contract_name):
+    frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+    
     contract = frappe.get_doc("Contract", contract_name)
-    # Retrieve all signees from the child table
-    signees = contract.signee  # Assuming 'signee' is the child table fieldname
+    signees = contract.signee 
 
     if not signees:
-        return {"error": "No signees found in the contract."}
+        return {"error": _("No signees found in the contract.")}
 
-    # Construct the recipients list
     recipients = []
     for idx, signee in enumerate(signees):
         recipients.append({
             "email": signee.email,
-            "name": signee.name or "Signee",  # Replace with appropriate field if available
+            "name": signee.name or _("Signee"), 
             "role": "SIGNER",
-            "signingOrder": idx  # Adjust signing order as needed
+            "signingOrder": idx 
         })
 
     payload = {
@@ -58,65 +65,54 @@ def create_documenso_record(contract_name):
         "externalId": contract.name,
         "recipients": recipients,
         "meta": {
-            "signingOrder": "SEQUENTIAL"  # Use "PARALLEL" if order doesn't matter
+            "signingOrder": "SEQUENTIAL" 
         },
         "authOptions": {},
         "formValues": {}
     }
 
-
-    response = requests.post(DOCUMENSO_BASE_URL, json=payload, headers=headers)
+    response = requests.post(get_base_url(), json=payload, headers=get_headers(), timeout=10)
     if response.status_code == 200:
         doc_data = response.json()
-        print(doc_data)
-        # frappe.db.set_value("Contract", contract.name, "document_id", doc_data.get("documentId"))
-        # frappe.db.set_value("Contract", contract.name, "upload_url", doc_data.get("uploadUrl"))
 
         if "recipients" in doc_data and doc_data["recipients"]:
-            print("\nRecipients:", doc_data["recipients"], "\n")
             recipient_ids = [str(r.get("recipientId")) for r in doc_data["recipients"] if r.get("recipientId")]
             joined_ids = ",".join(recipient_ids)
-            # frappe.db.set_value("Contract", contract.name, "recipient_id", joined_ids)
+            
             signing_url = [str(r.get("signingUrl")) for r in doc_data["recipients"] if r.get("signingUrl")]
             joined_urls = ",".join(signing_url)
-            # frappe.db.set_value("Contract", contract.name, "signing_url", joined_urls)
 
-# for api information
-            # Step 3: Create API Information record
             api_info = frappe.get_doc({
                 "doctype": "API Information",
                 "document_id": doc_data.get("documentId"),
                 "upload_url": doc_data.get("uploadUrl"),
                 "recipient_id": joined_ids,
                 "signing_url": joined_urls,
-                # "download_url": doc_data.get("downloadUrl")  # if available
             })
             api_info.insert(ignore_permissions=True)
 
-            # Step 4: Link API Information to Contract
             contract.db_set("documenso_id", api_info.name)
 
-        frappe.db.commit()
-
-        
         return doc_data
     else:
         frappe.log_error(f"Documenso Error: {response.text}", "Documenso API")
         return {"error": response.text}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def upload_contract_to_documenso(contract_name):
     try:
+        frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+        
         contract = frappe.get_doc("Contract", contract_name)
         pdf_file = get_pdf(frappe.get_print("Contract", contract_name, print_format="Contract Final Print"))
         api_info = frappe.get_doc("API Information", contract.documenso_id)
-        # upload_url = contract.upload_url  
-        upload_url = api_info.upload_url  # Use the upload URL from API Information
+        
+        upload_url = api_info.upload_url  
         if not upload_url:
-            frappe.throw("Upload URL is missing. Ensure the document is created in Documenso.")
+            frappe.throw(_("Upload URL is missing. Ensure the document is created in Documenso."))
 
         files = {'file': (f"{contract_name}.pdf", pdf_file, "application/pdf")}
-        response = requests.put(upload_url, files=files)
+        response = requests.put(upload_url, files=files, timeout=10)
 
         if response.status_code in [200, 201]:
             return {"success": True}
@@ -125,29 +121,29 @@ def upload_contract_to_documenso(contract_name):
     except Exception as e:
         return {"error": str(e)}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def create_field_in_documenso(contract_name):
+    frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+    
     contract = frappe.get_doc("Contract", contract_name)
-    # document_id = contract.document_id
     api_info = frappe.get_doc("API Information", contract.documenso_id)
     document_id = api_info.document_id
     recipient_ids_str = api_info.recipient_id
 
     if not document_id or not recipient_ids_str:
-        return {"error": "Document ID or Recipient ID(s) is missing."}
+        return {"error": _("Document ID or Recipient ID(s) is missing.")}
 
     try:
         document_id = int(document_id)
     except ValueError:
-        return {"error": "Invalid Document ID format."}
+        return {"error": _("Invalid Document ID format.")}
 
-    # Split the recipient IDs and convert to integers
     try:
         recipient_ids = [int(rid.strip()) for rid in recipient_ids_str.split(",") if rid.strip()]
     except ValueError:
-        return {"error": "Invalid Recipient ID(s) format."}
+        return {"error": _("Invalid Recipient ID(s) format.")}
 
-    url = f"{DOCUMENSO_BASE_URL}/{document_id}/fields"
+    url = f"{get_base_url()}/{document_id}/fields"
     errors = []
 
     for recipient_id in recipient_ids:
@@ -162,7 +158,7 @@ def create_field_in_documenso(contract_name):
             "fieldMeta": {}
         }
 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=get_headers(), timeout=10)
         if response.status_code not in [200, 201]:
             errors.append({
                 "recipient_id": recipient_id,
@@ -170,40 +166,36 @@ def create_field_in_documenso(contract_name):
             })
 
     if errors:
-        return {"error": "Some fields could not be created.", "details": errors}
+        return {"error": _("Some fields could not be created."), "details": errors}
     else:
         return {"success": True}
 
-
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def send_contract_for_signature(contract_name):
-    # Fetch contract document
+    frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+    
     contract = frappe.get_doc("Contract", contract_name)
-    # document_id = contract.document_id
     api_info = frappe.get_doc("API Information", contract.documenso_id)
     document_id = api_info.document_id
 
     if not document_id:
-        return {"error": "Document ID is missing."}
+        return {"error": _("Document ID is missing.")}
 
-    url = f"{DOCUMENSO_BASE_URL}/{int(document_id)}/send"
-    print("\nSending to:", url, "\n")
-
+    url = f"{get_base_url()}/{int(document_id)}/send"
     payload = {
         "sendEmail": True,
         "sendCompletionEmails": True
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=get_headers(), json=payload, timeout=10)
         response_data = response.json()
-        print(response_data)
     except Exception as e:
         frappe.log_error(
             title="Documenso Response Error",
             message=f"Error parsing response: {e}\nRaw response: {response.text}"
         )
-        return {"error": "Failed to parse Documenso response."}
+        return {"error": _("Failed to parse Documenso response.")}
 
     if response.status_code in [200, 201]:
         try:
@@ -214,25 +206,17 @@ def send_contract_for_signature(contract_name):
                 recipients = response_data
 
             if not recipients:
-                return {"error": "No recipients found in response."}
+                return {"error": _("No recipients found in response.")}
 
-            # Extract signing URLs corresponding to existing recipient IDs
-            recipient_ids = [rid.strip() for rid in api_info.recipient_id.split(",") if rid.strip()]
-            print(recipient_ids)
-
-            # Update the contract document
             api_info.save(ignore_permissions=True)
-            frappe.db.commit()
-
-            return {"message": "Document sent and signing URLs saved successfully."}
+            return {"message": _("Document sent and signing URLs saved successfully.")}
 
         except Exception as e:
             frappe.log_error(
                 title="Error Saving Signing URLs",
                 message=f"Exception: {e}\nResponse: {frappe.as_json(response_data)}"
             )
-            return {"error": "Error while saving signing URLs."}
-
+            return {"error": _("Error while saving signing URLs.")}
     else:
         frappe.log_error(
             title="Documenso API Error",
@@ -240,40 +224,38 @@ def send_contract_for_signature(contract_name):
         )
         return {"error": response_data}
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def download_signed_contract(contract_name):
+    frappe.has_permission("Contract", "write", doc=contract_name, throw=True)
+    
     contract = frappe.get_doc("Contract", contract_name)
-    # document_id = contract.document_id
     api_info = frappe.get_doc("API Information", contract.documenso_id)
     document_id = api_info.document_id
 
     if not document_id:
-        return {"error": "Document ID is missing."}
+        return {"error": _("Document ID is missing.")}
 
-    url = f"{DOCUMENSO_BASE_URL}/{int(document_id)}/download"
-    response = requests.get(url, headers=headers)
+    url = f"{get_base_url()}/{int(document_id)}/download"
+    response = requests.get(url, headers=get_headers(), timeout=10)
 
     if response.status_code == 200:
         try:
             data = response.json()
             download_url = data.get("downloadUrl")
-            frappe.log_error("Download URL:", download_url)
 
             if not download_url:
-                return {"error": "Download URL not found in the response."}
+                return {"error": _("Download URL not found in the response.")}
 
-            # Save the download URL to the API Information doctype
             frappe.db.set_value("API Information", api_info.name, "download_url", download_url)
-            frappe.db.commit()
 
             return {
                 "success": True,
-                "message": "Download URL saved successfully.",
+                "message": _("Download URL saved successfully."),
                 "download_url": download_url
             }
         except Exception as e:
             frappe.log_error(f"Download URL Parsing Error: {e}\nResponse: {response.text}")
-            return {"error": "Failed to parse download URL from Documenso."}
+            return {"error": _("Failed to parse download URL from Documenso.")}
     else:
         frappe.log_error(f"Documenso Download URL Error: {response.text}")
-        return {"error": f"Failed to get download URL. Status code: {response.status_code}"}
+        return {"error": _("Failed to get download URL. Status code: {0}").format(response.status_code)}
